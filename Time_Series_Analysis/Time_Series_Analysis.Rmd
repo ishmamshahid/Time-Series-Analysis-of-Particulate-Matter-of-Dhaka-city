@@ -1,0 +1,977 @@
+---
+title: "Time_Series_Analysis"
+author: "ishmam shahid"
+date: "8/25/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries
+
+```{r, message=FALSE}
+library(openair)
+library(lubridate)
+library(forecast)
+library(astsa)
+library(imager)
+library(dplyr)
+library(Metrics)
+library(caret)
+library(gridExtra)
+```
+
+
+```{r}
+set.seed(1234)
+```
+
+
+
+
+
+## Load Data from all stations
+
+
+```{r}
+CAMS1<-read.csv("CAMS1-SANGSAD all date.csv")
+CAMS2<-read.csv("CAMS2-FARMGATE all date.csv")
+CAMS3<-read.csv("CAMS3-DS all date.csv")
+```
+
+Time Series Plots
+
+```{r}
+CAMS1<-CAMS1[-1]
+date<- seq(as.Date('2013-01-01'),as.Date('2018-12-31'),by = 1)
+date<-as.POSIXct(strptime(date, format ="%Y-%m-%d" ))
+
+CAMS1<-cbind(date,CAMS1)
+
+plot(CAMS1$date, CAMS1$PM10, type = "l", xlab = "year", ylab = "PM10 ", main="PM10 Time series of CAMS1", col="dark red")
+grid (col= " blue")
+
+plot(CAMS1$date, CAMS1$PM2.5, type = "l", xlab = "year", ylab = "PM2.5 ", main="PM2.5 Time series of CAMS1", col="dark blue")
+grid(col="red")
+
+
+CAMS2<-CAMS2[-1]
+CAMS2<-cbind(date,CAMS2)
+
+plot(CAMS2$date, CAMS2$PM10, type = "l", xlab = "year", ylab = "PM10 ", main="PM10 Time series of CAMS2", col="dark red")
+grid (col= " blue")
+plot(CAMS2$date, CAMS2$PM2.5, type = "l", xlab = "year", ylab = "PM2.5 ", main="PM2.5 Time series of CAMS2", col="dark blue")
+grid(col="red")
+
+
+CAMS3<-CAMS3[-1]
+CAMS3<-cbind(date,CAMS3)
+
+plot(CAMS3$date, CAMS3$PM10, type = "l", xlab = "year", ylab = "PM10 ", main="PM10 Time series of CAMS3", col="dark red")
+grid (col= " blue")
+plot(CAMS3$date, CAMS3$PM2.5, type = "l", xlab = "year", ylab = "PM2.5 ", main="PM2.5 Time series of CAMS3", col="dark blue")
+grid(col="red")
+
+
+```
+
+
+
+
+Visualization of Daily Data by Calendar
+
+```{r}
+calendarPlot(CAMS1, pollutant = "PM10", year =2018,main = "PM10 concentration in 2018 (CAMS-1)")
+calendarPlot(CAMS2, pollutant = "PM2.5", annotate = "value", lim =65,year =2018,
+             cols = "Purples", col.lim = c("black", "red"),main = "PM2.5 concentration values (microgram/m3) in 2018 (CAMS-2)",cex.lim = c(.7,.5))
+
+
+calendarPlot(CAMS3, pollutant = "PM10",year =2018, breaks = c(0, 50, 100, 150, 1000),
+             labels = c("Very low (<50)", "Low (50-100)", "High (100-150)", "Beyond National Standards (>150)"),
+             cols = c("lightblue", "forestgreen", "yellow", "red"),main = "PM10 concentration (categorized) in 2018 (CAMS-3)")
+
+```
+
+
+
+```{r, echo=FALSE}
+cams1_data<- read.csv("CAMS1-SANGSAD all date.csv")
+colnames(cams1_data)
+cams1_data<-cams1_data[-1]
+date<- seq(as.Date('2013-01-01'),as.Date('2018-12-31'),by = 1)
+date<-as.POSIXct(strptime(date, format ="%Y-%m-%d" ))
+cams1_data<-cbind(date,cams1_data)
+
+
+cams2_data<- read.csv("CAMS2-FARMGATE all date.csv")
+cams2_data<-cams2_data[-1]
+cams2_data<-cbind(date,cams2_data)
+
+
+cams3_data<- read.csv("CAMS3-DS all date.csv")
+cams3_data<-cams3_data[-1]
+cams3_data<-cbind(date,cams3_data)
+
+```
+
+
+
+#Calculation of weekly averaged values for all stations
+
+```{r}
+# calculate weekly means
+Weekly_Means_PM10_1 <- aggregate(cams1_data["PM10"], format(cams1_data["date"],"%Y-%W"),
+                          mean, na.rm = TRUE)
+# derive the proper sequence of dates
+Weekly_Means_PM10_1$date <- seq(min(cams1_data$date), max(cams1_data$date), length = nrow(Weekly_Means_PM10_1))
+# plot the means
+plot(Weekly_Means_PM10_1$date, Weekly_Means_PM10_1[, "PM10"],
+     type = "l",
+     lwd = 1.5,
+     pch = 16,
+     col = "darkorange2",
+     xlab = "year",
+     ylab = "PM10",
+     ylim = c(0, 400),
+     main = "Weekly mean PM10 at CAMS-1.")
+
+grid()
+
+
+
+# calculate weekly means
+Weekly_Means_PM2.5_1 <- aggregate(cams1_data["PM2.5"], format(cams1_data["date"],"%Y-%W"),
+                               mean, na.rm = TRUE)
+# derive the proper sequence of dates
+Weekly_Means_PM2.5_1$date <- seq(min(cams1_data$date), max(cams1_data$date), length = nrow(Weekly_Means_PM2.5_1))
+# plot the means
+plot(Weekly_Means_PM2.5_1$date, Weekly_Means_PM2.5_1[, "PM2.5"],
+     type = "l",
+     lwd = 1.5,
+     pch = 16,
+     col = "darkred",
+     xlab = "year",
+     ylab = "PM2.5",
+     ylim = c(0, 300),
+     main = "Weekly mean PM2.5 at CAMS-1.")
+
+grid()
+
+
+
+# calculate weekly means
+Weekly_Means_PM10_2 <- aggregate(cams2_data["PM10"], format(cams2_data["date"],"%Y-%W"),
+                               mean, na.rm = TRUE)
+# derive the proper sequence of dates
+Weekly_Means_PM10_2$date <- seq(min(cams2_data$date), max(cams2_data$date), length = nrow(Weekly_Means_PM10_2))
+# plot the means
+plot(Weekly_Means_PM10_2$date, Weekly_Means_PM10_2[, "PM10"],
+     type = "l",
+     lwd = 1.5,
+     pch = 16,
+     col = "darkorange2",
+     xlab = "year",
+     ylab = "PM10",
+     ylim = c(0, 600),
+     main = "Weekly mean PM10 at CAMS-2.")
+
+grid()
+
+
+
+# calculate weekly means
+Weekly_Means_PM2.5_2 <- aggregate(cams2_data["PM2.5"], format(cams2_data["date"],"%Y-%W"),
+                                mean, na.rm = TRUE)
+# derive the proper sequence of dates
+Weekly_Means_PM2.5_2$date <- seq(min(cams2_data$date), max(cams2_data$date), length = nrow(Weekly_Means_PM2.5_2))
+# plot the means
+plot(Weekly_Means_PM2.5_2$date, Weekly_Means_PM2.5_2[, "PM2.5"],
+     type = "l",
+     lwd = 1.5,
+     pch = 16,
+     col = "darkred",
+     xlab = "year",
+     ylab = "PM2.5",
+     ylim = c(0, 300),
+     main = "Weekly mean PM2.5 at CAMS-2.")
+
+grid()
+
+
+
+# calculate weekly means
+Weekly_Means_PM10_3 <- aggregate(cams3_data["PM10"], format(cams3_data["date"],"%Y-%W"),
+                               mean, na.rm = TRUE)
+# derive the proper sequence of dates
+Weekly_Means_PM10_3$date <- seq(min(cams3_data$date), max(cams3_data$date), length = nrow(Weekly_Means_PM10_3))
+# plot the means
+plot(Weekly_Means_PM10_3$date, Weekly_Means_PM10_3[, "PM10"],
+     type = "l",
+     lwd = 1.5,
+     pch = 16,
+     col = "darkorange2",
+     xlab = "year",
+     ylab = "PM10",
+     ylim = c(0, 450),
+     main = "Weekly mean PM10 at CAMS-3.")
+
+
+# calculate weekly means
+Weekly_Means_PM2.5_3 <- aggregate(cams3_data["PM2.5"], format(cams3_data["date"],"%Y-%W"),
+                                mean, na.rm = TRUE)
+# derive the proper sequence of dates
+Weekly_Means_PM2.5_3$date <- seq(min(cams3_data$date), max(cams3_data$date), length = nrow(Weekly_Means_PM2.5_3))
+# plot the means
+plot(Weekly_Means_PM2.5_3$date, Weekly_Means_PM2.5_3[, "PM2.5"],
+     type = "l",
+     lwd = 1.5,
+     pch = 16,
+     col = "darkred",
+     xlab = "year",
+     ylab = "PM2.5",
+     ylim = c(0, 300),
+     main = "Weekly mean PM2.5 at CAMS-3.")
+
+grid()
+
+
+summary(Weekly_Means_PM10_1)
+summary(Weekly_Means_PM2.5_1)
+summary(Weekly_Means_PM10_2)
+summary(Weekly_Means_PM2.5_2)
+summary(Weekly_Means_PM10_3)
+summary(Weekly_Means_PM2.5_3)
+```
+
+
+PM Data are converted into time series objects.
+
+```{r}
+PM10.ts_1 <- ts(Weekly_Means_PM10_1$PM10,freq=365.25/7, start=decimal_date(ymd("2013-01-01")))
+PM2.5.ts_1 <- ts(Weekly_Means_PM2.5_1$PM2.5,freq=365.25/7, start=decimal_date(ymd("2013-01-01")))
+
+PM10.ts_2 <- ts(Weekly_Means_PM10_2$PM10,freq=365.25/7, start=decimal_date(ymd("2013-01-01")))
+PM2.5.ts_2 <- ts(Weekly_Means_PM2.5_2$PM2.5,freq=365.25/7, start=decimal_date(ymd("2013-01-01")))
+
+PM10.ts_3 <- ts(Weekly_Means_PM10_3$PM10,freq=365.25/7, start=decimal_date(ymd("2013-01-01")))
+PM2.5.ts_3 <- ts(Weekly_Means_PM2.5_3$PM2.5,freq=365.25/7, start=decimal_date(ymd("2013-01-01")))
+
+
+```
+
+Training-test set split
+
+```{r,warning=FALSE}
+PM10.ts.train_1<-window(PM10.ts_1, start = 2013, end = 2018)
+PM10.ts.test_1<-window(PM10.ts_1, start = 2018, end = 2019.1)
+PM2.5.ts.train_1<-window(PM2.5.ts_1, start = 2013, end = 2018)
+PM2.5.ts.test_1<-window(PM2.5.ts_1, start = 2018, end = 2019.1)
+
+PM10.ts.train_2<-window(PM10.ts_2, start = 2013, end = 2018)
+PM10.ts.test_2<-window(PM10.ts_2, start = 2018, end = 2019.1)
+PM2.5.ts.train_2<-window(PM2.5.ts_2, start = 2013, end = 2018)
+PM2.5.ts.test_2<-window(PM2.5.ts_2, start = 2018, end = 2019.1)
+
+PM10.ts.train_3<-window(PM10.ts_3, start = 2013, end = 2018)
+PM10.ts.test_3<-window(PM10.ts_3, start = 2018, end = 2019.1)
+PM2.5.ts.train_3<-window(PM2.5.ts_3, start = 2013, end = 2018)
+PM2.5.ts.test_3<-window(PM2.5.ts_3, start = 2018, end = 2019.1)
+```
+
+
+
+ACF and PACF of weekly PM10 and PM2.5 data
+
+```{r}
+
+# par(mfrow=c(3,2))
+# plot(acf(PM10.ts_1[46:318], lag.max = 104,plot=F),xaxp=c(0,104,2),main="Plot of ACF of PM10 (CAMS-1)")
+# plot(pacf(PM10.ts_1[46:318], lag.max = 104,plot=F),xaxp=c(0,104,2),main="Plot of PACF of PM10 (CAMS-1)")
+# plot(acf(PM10.ts_2[54:318], lag.max = 104,plot=F),xaxp=c(0,104,2),main="Plot of ACF of PM10 (CAMS-2)")
+# plot(pacf(PM10.ts_2[54:318], lag.max = 104,plot=F),xaxp=c(0,104,2),main="Plot of PACF of PM10 (CAMS-2)")
+# plot(acf(PM10.ts_3[1:318], lag.max = 104,plot=F),xaxp=c(0,104,2),main="Plot of ACF of PM10 (CAMS-3)")
+# plot(pacf(PM10.ts_3[1:318], lag.max = 104,plot=F),xaxp=c(0,104,2),main="Plot of PACF of PM10 (CAMS-3)")
+
+
+# par(mfrow=c(3,2))
+# plot(acf(PM2.5.ts_1[54:318], lag.max = 104,plot=F),xaxp=c(0,104,2),main="Plot of ACF of PM2.5 (CAMS-1)")
+# plot(pacf(PM2.5.ts_1[54:318], lag.max = 104,plot=F),xaxp=c(0,104,2),main="Plot of PACF of PM2.5 (CAMS-1)")
+# plot(acf(PM2.5.ts_2[54:318], lag.max = 104,plot=F),xaxp=c(0,104,2),main="Plot of ACF of PM2.5 (CAMS-2)")
+# plot(pacf(PM2.5.ts_2[54:318], lag.max = 104,plot=F),xaxp=c(0,104,2),main="Plot of PACF of PM2.5 (CAMS-2)")
+# plot(acf(PM2.5.ts_3[1:318], lag.max = 104,plot=F),xaxp=c(0,104,2),main="Plot of ACF of PM2.5 (CAMS-3)")
+# plot(pacf(PM2.5.ts_3[1:318], lag.max = 104,plot=F),xaxp=c(0,104,2),main="Plot of PACF of PM2.5 (CAMS-3)")
+
+acf_pacf_pm10 <- load.image('acf_pacf_pm10.jpeg')
+plot(acf_pacf_pm10,axes = F)
+acf_pacf_pm2.5 <- load.image('acf_pacf_pm2.5.jpeg')
+plot(acf_pacf_pm2.5,axes = F)
+
+```
+
+
+
+
+
+ACF and PACF of de-seasonalized PM10 and PM2.5 data
+
+```{r}
+# par(mfrow=c(3,2))
+# plot(acf(diff(PM10.ts_1[46:318], differences = 1,lag = 52),lag.max = 104,plot = F),xaxp=c(0,104,2),main="ACF of de-seasonalized and stationary data (CAMS-1, PM10)")
+# plot(pacf(diff(PM10.ts_1[46:318], differences = 1,lag = 52),lag.max = 104,plot = F),xaxp=c(0,104,2),main="PACF of de-seasonalized and stationary data (CAMS-1, PM10)")
+# 
+# plot(acf(diff(PM10.ts_2[54:318], differences = 1,lag = 52),lag.max = 104,plot = F),xaxp=c(0,104,2),main="ACF of de-seasonalized and stationary data (CAMS-2, PM10)")
+# plot(pacf(diff(PM10.ts_2[54:318], differences = 1,lag = 52),lag.max = 104,plot = F),xaxp=c(0,104,2),main="PACF of de-seasonalized and stationary data (CAMS-2, PM10)")
+# 
+# plot(acf(diff(PM10.ts_3[1:318], differences = 1,lag = 52),lag.max = 104,plot = F),xaxp=c(0,104,2),main="ACF of de-seasonalized and stationary data (CAMS-3, PM10)")
+# plot(pacf(diff(PM10.ts_3[1:318], differences = 1,lag = 52),lag.max = 104,plot = F),xaxp=c(0,104,2),main="PACF of de-seasonalized and stationary data (CAMS-3, PM10)")
+
+
+# par(mfrow=c(3,2))
+# plot(acf(diff(PM2.5.ts_1[54:318], differences = 1,lag = 52),lag.max = 104,plot = F),xaxp=c(0,104,2),main="ACF of de-seasonalized and stationary data (CAMS-1, PM2.5)")
+# plot(pacf(diff(PM2.5.ts_1[54:318], differences = 1,lag = 52),lag.max = 104,plot = F),xaxp=c(0,104,2),main="PACF of de-seasonalized and stationary data (CAMS-1, PM2.5)")
+# 
+# plot(acf(diff(PM2.5.ts_2[54:318], differences = 1,lag = 52),lag.max = 104,plot = F),xaxp=c(0,104,2),main="ACF of de-seasonalized and stationary data (CAMS-2, PM2.5)")
+# plot(pacf(diff(PM2.5.ts_2[54:318], differences = 1,lag = 52),lag.max = 104,plot = F),xaxp=c(0,104,2),main="PACF of de-seasonalized and stationary data (CAMS-2, PM2.5)")
+# 
+# plot(acf(diff(PM2.5.ts_3[1:318], differences = 1,lag = 52),lag.max = 104,plot = F),xaxp=c(0,104,2),main="ACF of de-seasonalized and stationary data (CAMS-3, PM2.5)")
+# plot(pacf(diff(PM2.5.ts_3[1:318], differences = 1,lag = 52),lag.max = 104,plot = F),xaxp=c(0,104,2),main="PACF of de-seasonalized and stationary data (CAMS-3, PM2.5)")
+
+diff_acf_pacf_pm10 <- load.image('diff_acf_pacf_pm10.jpeg')
+plot(diff_acf_pacf_pm10,axes = F)
+diff_acf_pacf_pm2.5 <- load.image('diff_acf_pacf_pm2.5.jpeg')
+plot(diff_acf_pacf_pm2.5,axes = F)
+
+
+```
+
+
+
+
+
+
+
+Automated search for the best fit Seasonal Autoregressive Integrated Moving Average Model
+```{r,warning=FALSE}
+
+print("PM10, CAMS-1")
+auto.arima(PM10.ts.train_1,allowdrift = F) 
+
+print("PM10, CAMS-2")
+sarima(PM10.ts.train_2,3,0,1,1,1,0,52,details = F) 
+
+print("PM10, CAMS-3")
+auto.arima(PM10.ts.train_3) 
+
+print("PM2.5, CAMS-1")
+auto.arima(PM2.5.ts.train_1) 
+
+print("PM2.5, CAMS-2")
+auto.arima(PM2.5.ts.train_2,allowdrift = F) 
+
+print("PM2.5, CAMS-3")
+auto.arima(PM2.5.ts.train_3) 
+
+```
+
+
+SARIMA model PM10 all stations
+```{r,warning=FALSE}
+sarima_pm10_1<- arima(x=PM10.ts.train_1, order = c(0,0,0), seasonal = list(order=c(1,1,0), period=52))
+sarima_pred_pm10_1<-forecast(sarima_pm10_1,h=57,level= c(95,95))
+sarima_pred_pm10_1_mean<-sarima_pred_pm10_1$mean
+
+
+
+sarima_pm10_2<- arima(x=PM10.ts.train_2, order = c(3,0,1), seasonal = list(order=c(1,1,0), period=52))
+sarima_pred_pm10_2<-forecast(sarima_pm10_2,h=57,level= c(95,95))
+sarima_pred_pm10_2_mean<-sarima_pred_pm10_2$mean
+
+
+
+sarima_pm10_3<- arima(x=PM10.ts.train_3, order = c(2,0,2), seasonal = list(order=c(1,1,0), period=52))
+sarima_pred_pm10_3<-forecast(sarima_pm10_3,h=57,level= c(95,95))
+sarima_pred_pm10_3_mean<-sarima_pred_pm10_3$mean
+```
+
+
+
+SARIMA model PM2.5 all stations
+```{r,warning=FALSE}
+sarima_pm2.5_1<- arima(x=PM2.5.ts.train_1, order = c(4,0,0), seasonal = list(order=c(1,1,0), period=52))
+sarima_pred_pm2.5_1<-forecast(sarima_pm2.5_1,h=57,level= c(95,95))
+sarima_pred_pm2.5_1_mean<-sarima_pred_pm2.5_1$mean
+
+sarima_pm2.5_2<- arima(x=PM2.5.ts.train_2, order = c(0,0,0), seasonal = list(order=c(1,1,0), period=52))
+sarima_pred_pm2.5_2<-forecast(sarima_pm2.5_2,h=57,level= c(95,95))
+sarima_pred_pm2.5_2_mean<-sarima_pred_pm2.5_2$mean
+
+sarima_pm2.5_3<- arima(x=PM2.5.ts.train_3, order = c(4,0,0), seasonal = list(order=c(1,1,0), period=52))
+sarima_pred_pm2.5_3<-forecast(sarima_pm2.5_3,h=57,level= c(95,95))
+sarima_pred_pm2.5_3_mean<-sarima_pred_pm2.5_3$mean
+```
+
+
+
+Plot of actual and forecasted values in the time series
+```{r}
+par(mfrow=c(3,1))
+##########PLOT of PM10 CAMS-1#############
+plot(PM10.ts_1, type="l",col="red", ylab="PM10",lwd=3, main="CAMS1 weekly PM10 data (time series)")
+
+par(new=TRUE)
+lines(sarima_pred_pm10_1_mean,   xlab="", ylab="", 
+      lty=2,col="blue",lwd=4)
+
+legend(2018.1,400,legend=c("Actual", "Predicted"),
+       col=c("red", "blue"), lty=1:2, cex=1,bty="n")
+grid()
+##########PLOT of PM10 CAMS-2#############
+plot(PM10.ts_2, type="l",col="red", ylab="PM10",lwd=3, main="CAMS2 weekly PM10 data (time series)")
+
+par(new=TRUE)
+lines(sarima_pred_pm10_2_mean,   xlab="", ylab="", 
+      lty=2,col="blue",lwd=4)
+
+legend(2018.4,600,legend=c("Actual", "Predicted"),
+       col=c("red", "blue"), lty=1:2, cex=1,bty="n")
+grid()
+##########PLOT of PM10 CAMS-3#############
+plot(PM10.ts_3, type="l",col="red", ylab="PM10",lwd=3, main="CAMS3 weekly PM10 data (time series)")
+
+par(new=TRUE)
+lines(sarima_pred_pm10_3_mean,   xlab="", ylab="", 
+      lty=2,col="blue",lwd=4)
+
+legend(2018.2,500,legend=c("Actual", "Predicted"),
+       col=c("red", "blue"), lty=1:2, cex=1,bty = "n")
+grid()
+
+
+
+
+par(mfrow=c(3,1))
+##########PLOT of PM2.5 CAMS-1#######
+plot(PM2.5.ts_1, type="l",col="orange3", ylab="PM2.5",lwd=2, main="CAMS1 weekly PM2.5 data (time series)")
+
+par(new=TRUE)
+lines(sarima_pred_pm2.5_1_mean,   xlab="", ylab="", 
+      lty=2,col="midnightblue",lwd=3)
+
+legend(2018.3,250,legend=c("Actual", "Predicted"),
+       col=c("orange3", "midnightblue"), lty=1:2, cex=.7)
+grid()
+##########PLOT of PM2.5 CAMS-2#######
+plot(PM2.5.ts_2, type="l",col="orange3", ylab="PM2.5",lwd=2, main="CAMS2 weekly PM2.5 data (time series)")
+
+par(new=TRUE)
+lines(sarima_pred_pm2.5_2_mean,   xlab="", ylab="", 
+      lty=2,col="midnightblue",lwd=3)
+
+legend(2018.4,350,legend=c("Actual", "Predicted"),
+       col=c("orange3", "midnightblue"), lty=1:2, cex=.7)
+grid()
+##########PLOT of PM2.5 CAMS-3#######
+plot(PM2.5.ts_3, type="l",col="orange3", ylab="PM2.5",lwd=2, main="CAMS3 weekly PM2.5 data (time series)")
+
+par(new=TRUE)
+lines(sarima_pred_pm2.5_3_mean,   xlab="", ylab="", 
+      lty=2,col="midnightblue",lwd=3)
+
+legend(2018.4,275,legend=c("Actual", "Predicted"),
+       col=c("orange3", "midnightblue"), lty=1:2, cex=.7)
+grid()
+```
+
+
+Diagnostic test of residuals
+
+```{r}
+############residual plot of SARIMA pm10########
+par(mfrow=c(3,2))
+plot(sarima_pm10_1$residuals,main="Residuals (PM10, CAMS-1)",ylab="Residuals")
+qqnorm(sarima_pm10_1$residuals)
+qqline(sarima_pm10_1$residuals)
+
+plot(sarima_pm10_2$residuals,main="Residuals (PM10, CAMS-2)",ylab="Residuals")
+qqnorm(sarima_pm10_2$residuals)
+qqline(sarima_pm10_2$residuals)
+
+plot(sarima_pm10_3$residuals,main="Residuals (PM10, CAMS-3)",ylab="Residuals")
+qqnorm(sarima_pm10_3$residuals)
+qqline(sarima_pm10_3$residuals)
+
+
+
+############residual plot of SARIMA pm2.5#########
+par(mfrow=c(3,2))
+plot(sarima_pm2.5_1$residuals,main="Residuals (PM2.5, CAMS-1)",ylab="Residuals")
+qqnorm(sarima_pm2.5_1$residuals)
+qqline(sarima_pm2.5_1$residuals)
+
+plot(sarima_pm2.5_2$residuals,main="Residuals (PM2.5, CAMS-2)",ylab="Residuals")
+qqnorm(sarima_pm2.5_2$residuals)
+qqline(sarima_pm2.5_2$residuals)
+
+plot(sarima_pm2.5_3$residuals,main="Residuals (PM2.5, CAMS-3)",ylab="Residuals")
+qqnorm(sarima_pm2.5_3$residuals)
+qqline(sarima_pm2.5_3$residuals)
+```
+
+
+
+
+
+
+```{r,warning=FALSE}
+options(scipen = 999)  
+#######WEEK DATES######
+Week_start<- seq(as.Date('2017-12-09'),as.Date('2019-01-05'),by = 7)
+Week_start<-as.POSIXct(strptime(Week_start, format ="%Y-%m-%d" ))
+Week_end<- seq(as.Date('2017-12-15'),as.Date('2019-01-11'),by = 7)
+Week_end<-as.POSIXct(strptime(Week_end, format ="%Y-%m-%d" ))
+Week_start<-as.character(Week_start)
+Week_end<-as.character(Week_end)
+###########PM10(CAMS-1)######
+sarima_pred_pm10_1_lower<-sarima_pred_pm10_1$lower
+sarima_pred_pm10_1_lower<-sarima_pred_pm10_1_lower[,1]
+
+sarima_pred_pm10_1_upper<-sarima_pred_pm10_1$upper
+sarima_pred_pm10_1_upper<-sarima_pred_pm10_1_upper[,1]
+
+df_PM10_1<-data.frame(Week_start,Week_end,PM10.ts.test_1,sarima_pred_pm10_1_mean,sarima_pred_pm10_1_lower,sarima_pred_pm10_1_upper) 
+df_PM10_1<-df_PM10_1 %>% 
+  mutate_if(is.numeric, round, digits=2)
+colnames(df_PM10_1)<-c("Week start","Week end","Actual PM10","Forecasted PM10","95% CI (Lower)","95% CI (Upper)")
+df_PM10_1$`95% CI (Lower)`<-  ifelse(df_PM10_1$`95% CI (Lower)` < 0, 0, df_PM10_1$`95% CI (Lower)`)
+#Directory must be changed if data frame is to be written in csv. However values had been extracted before in csv and rearranged in tabular format to be added in the thesis.The csv in the final format have been provided in the files of the current working directory. 
+#write.csv(df_PM10_1,"C:/Users/Asus/Desktop/@Thesis DATA-2020April27/@THESIS PRELIMINARY DATA ANALYSIS/25July/CAMS1 TIME SERIES/exported_csv/PM10_Forecasted.csv")  
+
+
+##########PM2.5 (CAMS-1)#########
+sarima_pred_pm2.5_1_lower<-sarima_pred_pm2.5_1$lower
+sarima_pred_pm2.5_1_lower<-sarima_pred_pm2.5_1_lower[,1]
+
+sarima_pred_pm2.5_1_upper<-sarima_pred_pm2.5_1$upper
+sarima_pred_pm2.5_1_upper<-sarima_pred_pm2.5_1_upper[,1]
+
+df_PM2.5_1<-data.frame(Week_start,Week_end,PM2.5.ts.test_1,sarima_pred_pm2.5_1_mean,sarima_pred_pm2.5_1_lower,sarima_pred_pm2.5_1_upper) 
+df_PM2.5_1<-df_PM2.5_1 %>% 
+  mutate_if(is.numeric, round, digits=2)
+colnames(df_PM2.5_1)<-c("Week start","Week end","Actual PM2.5","Forecasted PM2.5","95% CI (Lower)","95% CI (Upper)")
+df_PM2.5_1$`95% CI (Lower)`<-  ifelse(df_PM2.5_1$`95% CI (Lower)` < 0, 0, df_PM2.5_1$`95% CI (Lower)`)
+#Directory must be changed if data frame is to be written in csv. However values had been extracted before in csv and rearranged in tabular format to be added in the thesis.The csv in the final format have been provided in the files of the current working directory. 
+#write.csv(df_PM2.5_1,"C:/Users/Asus/Desktop/@Thesis DATA-2020April27/@THESIS PRELIMINARY DATA ANALYSIS/25July/CAMS1 TIME SERIES/exported_csv/PM2.5_Forecasted.csv")  
+
+
+###########PM10(CAMS-2)######
+sarima_pred_pm10_2_lower<-sarima_pred_pm10_2$lower
+sarima_pred_pm10_2_lower<-sarima_pred_pm10_2_lower[,1]
+
+sarima_pred_pm10_2_upper<-sarima_pred_pm10_2$upper
+sarima_pred_pm10_2_upper<-sarima_pred_pm10_2_upper[,1]
+
+df_PM10_2<-data.frame(Week_start,Week_end,PM10.ts.test_2,sarima_pred_pm10_2_mean,sarima_pred_pm10_2_lower,sarima_pred_pm10_2_upper) 
+df_PM10_2<-df_PM10_2 %>% 
+  mutate_if(is.numeric, round, digits=2)
+colnames(df_PM10_2)<-c("Week start","Week end","Actual PM10","Forecasted PM10","95% CI (Lower)","95% CI (Upper)")
+df_PM10_2$`95% CI (Lower)`<-  ifelse(df_PM10_2$`95% CI (Lower)` < 0, 0, df_PM10_2$`95% CI (Lower)`)
+#Directory must be changed if data frame is to be written in csv. However values had been extracted before in csv and rearranged in tabular format to be added in the thesis.The csv in the final format have been provided in the files of the current working directory. 
+#write.csv(df_PM10_2,"C:/Users/Asus/Desktop/@Thesis DATA-2020April27/@THESIS PRELIMINARY DATA ANALYSIS/25July/CAMS1 TIME SERIES/exported_csv/PM10_2_Forecasted.csv") 
+
+
+##########PM2.5 (CAMS-2)#########
+sarima_pred_pm2.5_2_lower<-sarima_pred_pm2.5_2$lower
+sarima_pred_pm2.5_2_lower<-sarima_pred_pm2.5_2_lower[,1]
+
+sarima_pred_pm2.5_2_upper<-sarima_pred_pm2.5_2$upper
+sarima_pred_pm2.5_2_upper<-sarima_pred_pm2.5_2_upper[,1]
+
+df_PM2.5_2<-data.frame(Week_start,Week_end,PM2.5.ts.test_2,sarima_pred_pm2.5_2_mean,sarima_pred_pm2.5_2_lower,sarima_pred_pm2.5_2_upper) 
+df_PM2.5_2<-df_PM2.5_2 %>% 
+  mutate_if(is.numeric, round, digits=2)
+colnames(df_PM2.5_2)<-c("Week start","Week end","Actual PM2.5","Forecasted PM2.5","95% CI (Lower)","95% CI (Upper)")
+df_PM2.5_2$`95% CI (Lower)`<-  ifelse(df_PM2.5_2$`95% CI (Lower)` < 0, 0, df_PM2.5_2$`95% CI (Lower)`)
+#Directory must be changed if data frame is to be written in csv. However values had been extracted before in csv and rearranged in tabular format to be added in the thesis.The csv in the final format have been provided in the files of the current working directory. 
+#write.csv(df_PM2.5_2,"C:/Users/Asus/Desktop/@Thesis DATA-2020April27/@THESIS PRELIMINARY DATA ANALYSIS/25July/CAMS1 TIME SERIES/exported_csv/PM2.5_Forecasted_2.csv")  
+
+
+###########PM10(CAMS-3)######
+sarima_pred_pm10_3_lower<-sarima_pred_pm10_3$lower
+sarima_pred_pm10_3_lower<-sarima_pred_pm10_3_lower[,1]
+
+sarima_pred_pm10_3_upper<-sarima_pred_pm10_3$upper
+sarima_pred_pm10_3_upper<-sarima_pred_pm10_3_upper[,1]
+
+df_PM10_3<-data.frame(Week_start,Week_end,PM10.ts.test_3,sarima_pred_pm10_3_mean,sarima_pred_pm10_3_lower,sarima_pred_pm10_3_upper) 
+df_PM10_3<-df_PM10_3 %>% 
+  mutate_if(is.numeric, round, digits=2)
+colnames(df_PM10_3)<-c("Week start","Week end","Actual PM10","Forecasted PM10","95% CI (Lower)","95% CI (Upper)")
+df_PM10_3$`95% CI (Lower)`<-  ifelse(df_PM10_3$`95% CI (Lower)` < 0, 0, df_PM10_3$`95% CI (Lower)`)
+#Directory must be changed if data frame is to be written in csv. However values had been extracted before in csv and rearranged in tabular format to be added in the thesis.The csv in the final format have been provided in the files of the current working directory. 
+#write.csv(df_PM10_3,"C:/Users/Asus/Desktop/@Thesis DATA-2020April27/@THESIS PRELIMINARY DATA ANALYSIS/25July/CAMS1 TIME SERIES/exported_csv/PM10_Forecasted_3.csv")  
+
+
+##########PM2.5 (CAMS-3)#########
+sarima_pred_pm2.5_3_lower<-sarima_pred_pm2.5_3$lower
+sarima_pred_pm2.5_3_lower<-sarima_pred_pm2.5_3_lower[,1]
+
+sarima_pred_pm2.5_3_upper<-sarima_pred_pm2.5_3$upper
+sarima_pred_pm2.5_3_upper<-sarima_pred_pm2.5_3_upper[,1]
+
+df_PM2.5_3<-data.frame(Week_start,Week_end,PM2.5.ts.test_3,sarima_pred_pm2.5_3_mean,sarima_pred_pm2.5_3_lower,sarima_pred_pm2.5_3_upper) 
+df_PM2.5_3<-df_PM2.5_3 %>% 
+  mutate_if(is.numeric, round, digits=2)
+colnames(df_PM2.5_3)<-c("Week start","Week end","Actual PM2.5","Forecasted PM2.5","95% CI (Lower)","95% CI (Upper)")
+df_PM2.5_3$`95% CI (Lower)`<-  ifelse(df_PM2.5_3$`95% CI (Lower)` < 0, 0, df_PM2.5_3$`95% CI (Lower)`)
+#Directory must be changed if data frame is to be written in csv. However values had been extracted before in csv and rearranged in tabular format to be added in the thesis.The csv in the final format have been provided in the files of the current working directory. 
+#write.csv(df_PM2.5_3,"C:/Users/Asus/Desktop/@Thesis DATA-2020April27/@THESIS PRELIMINARY DATA ANALYSIS/25July/CAMS1 TIME SERIES/exported_csv/PM2.5_Forecasted_3.csv")  
+
+
+```
+
+
+TBATS model for PM10 and PM2.5 for all stations
+
+```{r,warning=FALSE}
+tbats_pm10_1<-tbats(PM10.ts.train_1)
+tbats_pred_pm10_1<-forecast(tbats_pm10_1,h=57)
+TBATS_pred_pm10_1<-tbats_pred_pm10_1$mean
+
+tbats_pm10_2<-tbats(PM10.ts.train_2)
+tbats_pred_pm10_2<-forecast(tbats_pm10_2,h=57)
+TBATS_pred_pm10_2<-tbats_pred_pm10_2$mean
+
+tbats_pm10_3<-tbats(PM10.ts.train_3)
+tbats_pred_pm10_3<-forecast(tbats_pm10_3,h=57)
+TBATS_pred_pm10_3<-tbats_pred_pm10_3$mean
+
+tbats_pm2.5_1<-tbats(PM2.5.ts.train_1)
+tbats_pred_pm2.5_1<-forecast(tbats_pm2.5_1,h=57)
+TBATS_pred_pm2.5_1<-tbats_pred_pm2.5_1$mean
+
+tbats_pm2.5_2<-tbats(PM2.5.ts.train_2)
+tbats_pred_pm2.5_2<-forecast(tbats_pm2.5_2,h=57)
+TBATS_pred_pm2.5_2<-tbats_pred_pm2.5_2$mean
+
+tbats_pm2.5_3<-tbats(PM2.5.ts.train_3)
+tbats_pred_pm2.5_3<-forecast(tbats_pm2.5_3,h=57)
+TBATS_pred_pm2.5_3<-tbats_pred_pm2.5_3$mean
+
+```
+
+
+
+Forecast plots for TBATS models
+
+```{r}
+par(mfrow=c(3,2))
+plot(tbats_pred_pm10_1,ylab = "PM10",sub="PM10 forecast, CAMS-1")
+plot(tbats_pred_pm2.5_1,ylab = "PM2.5",sub="PM2.5 forecast, CAMS-1")
+plot(tbats_pred_pm10_2,ylab = "PM10",sub="PM10 forecast, CAMS-2")
+plot(tbats_pred_pm2.5_2,ylab = "PM2.5",sub="PM2.5 forecast, CAMS-2")
+plot(tbats_pred_pm10_3,ylab = "PM10",sub="PM10 forecast, CAMS-3")
+plot(tbats_pred_pm2.5_3,ylab = "PM2.5",sub="PM2.5 forecast, CAMS-3")
+
+```
+
+
+
+
+
+
+NNAR model for PM10 and PM2.5 for all stations
+
+```{r,warning=FALSE}
+nnar_pm10_1<- nnetar(PM10.ts.train_1)
+nnar_pred_pm10_1<-forecast(nnar_pm10_1,h=57)
+NNAR_pred_pm10_1<-nnar_pred_pm10_1$mean
+
+nnar_pm10_2<- nnetar(PM10.ts.train_2)
+nnar_pred_pm10_2<-forecast(nnar_pm10_2,h=57)
+NNAR_pred_pm10_2<-nnar_pred_pm10_2$mean
+
+nnar_pm10_3<- nnetar(PM10.ts.train_3)
+nnar_pred_pm10_3<-forecast(nnar_pm10_3,h=57)
+NNAR_pred_pm10_3<-nnar_pred_pm10_3$mean
+
+nnar_pm2.5_1<- nnetar(PM2.5.ts.train_1)
+nnar_pred_pm2.5_1<-forecast(nnar_pm2.5_1,h=57)
+NNAR_pred_pm2.5_1<-nnar_pred_pm2.5_1$mean
+
+nnar_pm2.5_2<- nnetar(PM2.5.ts.train_2)
+nnar_pred_pm2.5_2<-forecast(nnar_pm2.5_2,h=57)
+NNAR_pred_pm2.5_2<-nnar_pred_pm2.5_2$mean
+
+nnar_pm2.5_3<- nnetar(PM2.5.ts.train_3)
+nnar_pred_pm2.5_3<-forecast(nnar_pm2.5_3,h=57)
+NNAR_pred_pm2.5_3<-nnar_pred_pm2.5_3$mean
+
+```
+
+
+Forecast plots for Neural Network Autoregressive models
+
+```{r}
+par(mfrow=c(3,2))
+plot(nnar_pred_pm10_1,ylab = "PM10",sub="PM10 forecast, CAMS-1")
+plot(nnar_pred_pm2.5_1,ylab = "PM10",sub="PM2.5 forecast, CAMS-1")
+plot(nnar_pred_pm10_2,ylab = "PM10",sub="PM10 forecast, CAMS-2")
+plot(nnar_pred_pm2.5_2,ylab = "PM10",sub="PM2.5 forecast, CAMS-2")
+plot(nnar_pred_pm10_3,ylab = "PM10",sub="PM10 forecast, CAMS-3")
+plot(nnar_pred_pm2.5_3,ylab = "PM10",sub="PM2.5 forecast, CAMS-3")
+
+```
+
+
+
+Comparison between different time series models  for PM 10 and PM 2.5 for all stations
+
+```{r}
+pm10_metrics_df_1<-data.frame(rbind(postResample(sarima_pred_pm10_1_mean,PM10.ts.test_1),
+                          postResample(TBATS_pred_pm10_1,PM10.ts.test_1),
+                          postResample(NNAR_pred_pm10_1,PM10.ts.test_1)))
+
+row.names(pm10_metrics_df_1)<-c("SARIMA","TBATS","NNAR")
+print("Comparison between different time series models  for PM 10 (CAMS-1)")
+pm10_metrics_df_1
+
+
+pm10_metrics_df_2<-data.frame(rbind(postResample(sarima_pred_pm10_2_mean,PM10.ts.test_2),
+                          postResample(TBATS_pred_pm10_2,PM10.ts.test_2),
+                          postResample(NNAR_pred_pm10_2,PM10.ts.test_2)))
+
+row.names(pm10_metrics_df_2)<-c("SARIMA","TBATS","NNAR")
+print("Comparison between different time series models  for PM 10 (CAMS-2)")
+pm10_metrics_df_2
+
+
+pm10_metrics_df_3<-data.frame(rbind(postResample(sarima_pred_pm10_3_mean,PM10.ts.test_3),
+                          postResample(TBATS_pred_pm10_3,PM10.ts.test_3),
+                          postResample(NNAR_pred_pm10_3,PM10.ts.test_3)))
+
+row.names(pm10_metrics_df_3)<-c("SARIMA","TBATS","NNAR")
+print("Comparison between different time series models  for PM 10 (CAMS-3)")
+pm10_metrics_df_3
+
+
+
+
+
+pm2.5_metrics_df_1<-data.frame(rbind(postResample(sarima_pred_pm2.5_1_mean,PM2.5.ts.test_1),
+                          postResample(TBATS_pred_pm2.5_1,PM2.5.ts.test_1),
+                          postResample(NNAR_pred_pm2.5_1,PM2.5.ts.test_1)))
+
+row.names(pm2.5_metrics_df_1)<-c("SARIMA","TBATS","NNAR")
+print("Comparison between different time series models  for PM 2.5 (CAMS-1)")
+pm2.5_metrics_df_1
+
+
+pm2.5_metrics_df_2<-data.frame(rbind(postResample(sarima_pred_pm2.5_2_mean,PM2.5.ts.test_2),
+                          postResample(TBATS_pred_pm2.5_2,PM2.5.ts.test_2),
+                          postResample(NNAR_pred_pm2.5_2,PM2.5.ts.test_2)))
+
+row.names(pm2.5_metrics_df_2)<-c("SARIMA","TBATS","NNAR")
+print("Comparison between different time series models  for PM 2.5 (CAMS-2)")
+pm2.5_metrics_df_2
+
+
+pm2.5_metrics_df_3<-data.frame(rbind(postResample(sarima_pred_pm2.5_3_mean,PM2.5.ts.test_3),
+                          postResample(TBATS_pred_pm2.5_3,PM2.5.ts.test_3),
+                          postResample(NNAR_pred_pm2.5_3,PM2.5.ts.test_3)))
+
+row.names(pm2.5_metrics_df_3)<-c("SARIMA","TBATS","NNAR")
+print("Comparison between different time series models  for PM 2.5 (CAMS-3)")
+pm2.5_metrics_df_3
+```
+
+
+
+Constructing data frames for plotting the actual vs predicted values of the best selected models based on the minimum RMSE
+
+```{r,message=FALSE}
+test_date<- seq(as.Date('2017-12-09'),as.Date('2019-01-11'),by = 7)
+test_date<-as.POSIXct(strptime(test_date, format ="%Y-%m-%d" ))
+
+w_10_1_df<- data.frame(test_date,NNAR_pred_pm10_1,PM10.ts.test_1)
+w_10_2_df<- data.frame(test_date,TBATS_pred_pm10_2,PM10.ts.test_2)
+w_10_3_df<- data.frame(test_date,NNAR_pred_pm10_3,PM10.ts.test_3)
+
+w_2.5_1_df<- data.frame(test_date,TBATS_pred_pm2.5_1,PM2.5.ts.test_1)
+w_2.5_2_df<- data.frame(test_date,NNAR_pred_pm2.5_2,PM2.5.ts.test_2)
+w_2.5_3_df<- data.frame(test_date,TBATS_pred_pm2.5_3,PM2.5.ts.test_3)
+
+colnames(w_10_1_df)<-c("date","NNAR_Predicted","Actual")
+colnames(w_10_2_df)<-c("date","TBATS_Predicted","Actual")
+colnames(w_10_3_df)<-c("date","NNAR_Predicted","Actual")
+colnames(w_2.5_1_df)<-c("date","TBATS_Predicted","Actual")
+colnames(w_2.5_2_df)<-c("date","NNAR_Predicted","Actual")
+colnames(w_2.5_3_df)<-c("date","TBATS_Predicted","Actual")
+
+
+w_10_1_plot<- ggplot(data = w_10_1_df, aes(x = date)) +
+  geom_line(aes(y = Actual, colour = "Actual")) +
+  geom_line(aes(y = NNAR_Predicted, colour = "NNAR_Predicted"),lwd=1) +
+  
+  scale_colour_manual("", 
+                      breaks = c("Actual", "NNAR_Predicted"),
+                      values = c("darkblue", "red")) +
+  labs( y = "PM10", title = "Predicted vs Observed values of PM 10 (weekly avg.) during 2018 in CAMS-1")
+
+
+w_10_2_plot<- ggplot(data = w_10_2_df, aes(x = date)) +
+  geom_line(aes(y = Actual, colour = "Actual")) +
+  geom_line(aes(y = TBATS_Predicted, colour = "TBATS_Predicted"),lwd=1) +
+  
+  scale_colour_manual("", 
+                      breaks = c("Actual", "TBATS_Predicted"),
+                      values = c("darkblue", "red")) +
+  labs( y = "PM10", title = "Predicted vs Observed values of PM 10 (weekly avg.) during 2018 in CAMS-2")
+
+
+w_10_3_plot<- ggplot(data = w_10_3_df, aes(x = date)) +
+  geom_line(aes(y = Actual, colour = "Actual")) +
+  geom_line(aes(y = NNAR_Predicted, colour = "NNAR_Predicted"),lwd=1) +
+  
+  scale_colour_manual("", 
+                      breaks = c("Actual", "NNAR_Predicted"),
+                      values = c("darkblue", "red")) +
+  labs( y = "PM10", title = "Predicted vs Observed values of PM 10 (weekly avg.) during 2018 in CAMS-3")
+
+
+w_2.5_1_plot<- ggplot(data = w_2.5_1_df, aes(x = date)) +
+  geom_line(aes(y = Actual, colour = "Actual")) +
+  geom_line(aes(y = TBATS_Predicted, colour = "TBATS_Predicted"),lwd=1) +
+  
+  scale_colour_manual("", 
+                      breaks = c("Actual", "TBATS_Predicted"),
+                      values = c("darkblue", "red")) +
+  labs( y = "PM2.5", title = "Predicted vs Observed values of PM 2.5 (weekly avg.) during 2018 in CAMS-1")
+
+
+w_2.5_2_plot<- ggplot(data = w_2.5_2_df, aes(x = date)) +
+  geom_line(aes(y = Actual, colour = "Actual")) +
+  geom_line(aes(y = NNAR_Predicted, colour = "NNAR_Predicted"),lwd=1) +
+  
+  scale_colour_manual("", 
+                      breaks = c("Actual", "NNAR_Predicted"),
+                      values = c("darkblue", "red")) +
+  labs( y = "PM2.5", title = "Predicted vs Observed values of PM 2.5 (weekly avg.) during 2018 in CAMS-2")
+
+w_2.5_3_plot<- ggplot(data = w_2.5_3_df, aes(x = date)) +
+  geom_line(aes(y = Actual, colour = "Actual")) +
+  geom_line(aes(y = TBATS_Predicted, colour = "TBATS_Predicted"),lwd=1) +
+  
+  scale_colour_manual("", 
+                      breaks = c("Actual", "TBATS_Predicted"),
+                      values = c("darkblue", "red")) +
+  labs( y = "PM2.5", title = "Predicted vs Observed values of PM 2.5 (weekly avg.) during 2018 in CAMS-3")
+
+
+```
+
+```{r,message=FALSE}
+grid.arrange(w_10_1_plot,w_10_2_plot,w_10_3_plot, nrow=3)
+grid.arrange(w_2.5_1_plot,w_2.5_2_plot,w_2.5_3_plot, nrow=3)
+```
+
+
+
+
+
+Correlation Plot
+
+```{r,message=FALSE}
+R2_10_1 <- caret::postResample(NNAR_pred_pm10_1,PM10.ts.test_1)
+r2_10_1 <- ggplot(w_10_1_df, aes(Actual,NNAR_Predicted))
+r2_10_1 <- r2_10_1 + geom_point(alpha = .5)
+r2_10_1 <- r2_10_1 + annotate(geom = "text", x=200,y=100,  label = paste("R**2 = ", round(R2_10_1[2], 3)))
+r2_10_1 <- r2_10_1 + labs(x = "Actual", y = "Predicted", title = "Correlation Plot, PM10 (CAMS-1)-NNAR")
+r2_10_1 <- r2_10_1 + geom_smooth(se=F, method = "lm")
+
+
+
+R2_10_2 <- caret::postResample(TBATS_pred_pm10_2,PM10.ts.test_2)
+r2_10_2 <- ggplot(w_10_2_df, aes(Actual,TBATS_Predicted))
+r2_10_2 <- r2_10_2 + geom_point(alpha = .5)
+r2_10_2 <- r2_10_2 + annotate(geom = "text", x=200,y=100,  label = paste("R**2 = ", round(R2_10_2[2], 3)))
+r2_10_2 <- r2_10_2 + labs(x = "Actual", y = "Predicted", title = "Correlation Plot, PM10 (CAMS-2)-TBATS")
+r2_10_2 <- r2_10_2 + geom_smooth(se=F, method = "lm")
+
+
+
+R2_10_3 <- caret::postResample(NNAR_pred_pm10_3,PM10.ts.test_3)
+r2_10_3 <- ggplot(w_10_3_df, aes(Actual,NNAR_Predicted))
+r2_10_3 <- r2_10_3 + geom_point(alpha = .5)
+r2_10_3 <- r2_10_3 + annotate(geom = "text", x=250,y=100,  label = paste("R**2 = ", round(R2_10_3[2], 3)))
+r2_10_3 <- r2_10_3 + labs(x = "Actual", y = "Predicted", title = "Correlation Plot, PM10 (CAMS-3)-NNAR")
+r2_10_3 <- r2_10_3 + geom_smooth(se=F, method = "lm")
+
+
+
+R2_2.5_1 <- caret::postResample(TBATS_pred_pm2.5_1,PM2.5.ts.test_1)
+r2_2.5_1 <- ggplot(w_2.5_1_df, aes(Actual,TBATS_Predicted))
+r2_2.5_1 <- r2_2.5_1 + geom_point(alpha = .5)
+r2_2.5_1 <- r2_2.5_1 + annotate(geom = "text", x=150,y=100,  label = paste("R**2 = ", round(R2_2.5_1[2], 3)))
+r2_2.5_1 <- r2_2.5_1 + labs(x = "Actual", y = "Predicted", title = "Correlation Plot, PM2.5 (CAMS-1)-TBATS")
+r2_2.5_1 <- r2_2.5_1 + geom_smooth(se=F, method = "lm")
+
+
+
+R2_2.5_2 <- caret::postResample(NNAR_pred_pm2.5_2,PM2.5.ts.test_2)
+r2_2.5_2 <- ggplot(w_2.5_2_df, aes(Actual,NNAR_Predicted))
+r2_2.5_2 <- r2_2.5_2 + geom_point(alpha = .5)
+r2_2.5_2 <- r2_2.5_2 + annotate(geom = "text", x=150,y=100,  label = paste("R**2 = ", round(R2_2.5_2[2], 3)))
+r2_2.5_2 <- r2_2.5_2 + labs(x = "Actual", y = "Predicted", title = "Correlation Plot, PM2.5 (CAMS-2)-NNAR")
+r2_2.5_2 <- r2_2.5_2 + geom_smooth(se=F, method = "lm")
+
+
+
+
+R2_2.5_3 <- caret::postResample(TBATS_pred_pm2.5_3,PM2.5.ts.test_3)
+r2_2.5_3 <- ggplot(w_2.5_3_df, aes(Actual,TBATS_Predicted))
+r2_2.5_3 <- r2_2.5_3 + geom_point(alpha = .5)
+r2_2.5_3 <- r2_2.5_3 + annotate(geom = "text", x=150,y=100,  label = paste("R**2 = ", round(R2_2.5_3[2], 3)))
+r2_2.5_3 <- r2_2.5_3 + labs(x = "Actual", y = "Predicted", title = "Correlation Plot, PM2.5 (CAMS-3)-TBATS")
+r2_2.5_3 <- r2_2.5_3 + geom_smooth(se=F, method = "lm")
+
+```
+
+
+
+```{r,message=FALSE}
+grid.arrange(r2_10_1,r2_10_2,r2_10_3,nrow=3)
+grid.arrange(r2_2.5_1,r2_2.5_2,r2_2.5_3,nrow=3)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
